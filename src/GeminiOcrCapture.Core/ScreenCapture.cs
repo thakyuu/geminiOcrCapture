@@ -7,10 +7,12 @@ namespace GeminiOcrCapture.Core;
 public class ScreenCapture : IDisposable
 {
     private Rectangle _captureArea;
-    private Form? _overlay;
+    private Form[]? _overlays;
     private bool _isCapturing;
     private Point _startPoint;
     private bool _disposed;
+    private Screen? _activeScreen;
+    private bool _isDragging;
 
     public event EventHandler<Image>? CaptureCompleted;
     public event EventHandler? CaptureCancelled;
@@ -18,81 +20,154 @@ public class ScreenCapture : IDisposable
     public void StartCapture()
     {
         _isCapturing = true;
-        ShowOverlay();
+        _isDragging = false;
+        ShowOverlays();
     }
 
-    private void ShowOverlay()
+    private void ShowOverlays()
     {
-        _overlay = new Form
+        // すべてのスクリーンに対してオーバーレイを作成
+        _overlays = Screen.AllScreens.Select(screen =>
         {
-            FormBorderStyle = FormBorderStyle.None,
-            ShowInTaskbar = false,
-            TopMost = true,
-            WindowState = FormWindowState.Maximized,
-            BackColor = Color.Black,
-            Opacity = 0.3,
-            Cursor = Cursors.Cross
-        };
-
-        _overlay.KeyPress += (s, e) =>
-        {
-            if (e.KeyChar == (char)Keys.Escape)
+            var overlay = new Form
             {
-                CancelCapture();
-            }
-        };
+                FormBorderStyle = FormBorderStyle.None,
+                ShowInTaskbar = false,
+                TopMost = true,
+                BackColor = Color.Black,
+                Opacity = 0.3,
+                Cursor = Cursors.Cross,
+                StartPosition = FormStartPosition.Manual, // 手動で位置を設定
+                Location = screen.Bounds.Location, // スクリーンの位置に合わせる
+                Size = screen.Bounds.Size, // スクリーンのサイズに合わせる
+                Owner = null // オーナーウィンドウを設定しない
+            };
 
-        _overlay.MouseDown += (s, e) =>
-        {
-            if (e.Button == MouseButtons.Left)
+            // スクリーンの位置とサイズに合わせてオーバーレイを配置
+            overlay.Bounds = screen.Bounds;
+
+            overlay.KeyDown += (s, e) =>
             {
-                _startPoint = e.Location;
-                _captureArea = new Rectangle(_startPoint, Size.Empty);
-            }
-        };
+                if (e.KeyCode == Keys.Escape)
+                {
+                    CancelCapture();
+                }
+            };
 
-        _overlay.MouseMove += (s, e) =>
-        {
-            if (_isCapturing && e.Button == MouseButtons.Left)
+            overlay.MouseDown += (s, e) =>
             {
-                int x = Math.Min(_startPoint.X, e.X);
-                int y = Math.Min(_startPoint.Y, e.Y);
-                int width = Math.Abs(e.X - _startPoint.X);
-                int height = Math.Abs(e.Y - _startPoint.Y);
+                if (e.Button == MouseButtons.Left)
+                {
+                    _activeScreen = screen;
+                    _startPoint = e.Location;
+                    _startPoint.Offset(screen.Bounds.Location);
+                    _captureArea = new Rectangle(_startPoint, Size.Empty);
+                    _isDragging = true;
+                }
+            };
 
-                _captureArea = new Rectangle(x, y, width, height);
-                _overlay.Invalidate();
-            }
-        };
-
-        _overlay.MouseUp += (s, e) =>
-        {
-            if (e.Button == MouseButtons.Left)
+            overlay.MouseMove += (s, e) =>
             {
-                CaptureArea();
-            }
-        };
+                if (_isCapturing && _isDragging && e.Button == MouseButtons.Left)
+                {
+                    var currentPoint = e.Location;
+                    currentPoint.Offset(screen.Bounds.Location);
 
-        _overlay.Paint += (s, e) =>
-        {
-            if (_captureArea.Width > 0 && _captureArea.Height > 0)
+                    int x = Math.Min(_startPoint.X, currentPoint.X);
+                    int y = Math.Min(_startPoint.Y, currentPoint.Y);
+                    int width = Math.Abs(currentPoint.X - _startPoint.X);
+                    int height = Math.Abs(currentPoint.Y - _startPoint.Y);
+
+                    _captureArea = new Rectangle(x, y, width, height);
+                    RefreshAllOverlays();
+                }
+            };
+
+            overlay.MouseUp += (s, e) =>
             {
-                using var pen = new Pen(Color.LimeGreen, 3);
-                e.Graphics.DrawRectangle(pen, _captureArea);
+                if (e.Button == MouseButtons.Left && _isDragging)
+                {
+                    _isDragging = false;
+                    
+                    // 最小サイズのチェック
+                    if (_captureArea.Width > 5 && _captureArea.Height > 5)
+                    {
+                        CaptureArea();
+                    }
+                    else
+                    {
+                        // 小さすぎる選択はキャンセル
+                        _captureArea = Rectangle.Empty;
+                        RefreshAllOverlays();
+                    }
+                }
+            };
 
-                var sizeText = $"{_captureArea.Width} x {_captureArea.Height}";
-                var font = new Font("Arial", 12);
-                var brush = new SolidBrush(Color.LimeGreen);
-                var textSize = e.Graphics.MeasureString(sizeText, font);
-                var textLocation = new PointF(
-                    _captureArea.X + (_captureArea.Width - textSize.Width) / 2,
-                    _captureArea.Y + _captureArea.Height + 5);
+            overlay.Paint += (s, e) =>
+            {
+                if (_captureArea.Width > 0 && _captureArea.Height > 0)
+                {
+                    // スクリーン座標をオーバーレイ座標に変換
+                    var localRect = new Rectangle(
+                        _captureArea.X - screen.Bounds.X,
+                        _captureArea.Y - screen.Bounds.Y,
+                        _captureArea.Width,
+                        _captureArea.Height
+                    );
 
-                e.Graphics.DrawString(sizeText, font, brush, textLocation);
+                    // 選択範囲が現在のスクリーンと交差している場合のみ描画
+                    if (screen.Bounds.IntersectsWith(_captureArea))
+                    {
+                        using var pen = new Pen(Color.LimeGreen, 3);
+                        e.Graphics.DrawRectangle(pen, localRect);
+
+                        var sizeText = $"{_captureArea.Width} x {_captureArea.Height}";
+                        var font = new Font("Arial", 12);
+                        var brush = new SolidBrush(Color.LimeGreen);
+                        var textSize = e.Graphics.MeasureString(sizeText, font);
+                        var textLocation = new PointF(
+                            localRect.X + (localRect.Width - textSize.Width) / 2,
+                            localRect.Y + localRect.Height + 5);
+
+                        e.Graphics.DrawString(sizeText, font, brush, textLocation);
+                    }
+                }
+            };
+
+            // フォームのアクティブ化を防ぐ
+            overlay.Activated += (s, e) => 
+            {
+                overlay.BringToFront();
+                overlay.Focus();
+            };
+
+            return overlay;
+        }).ToArray();
+
+        // すべてのオーバーレイを表示
+        foreach (var overlay in _overlays)
+        {
+            overlay.Show();
+        }
+
+        // 最前面に表示されることを保証
+        foreach (var overlay in _overlays)
+        {
+            overlay.TopMost = true;
+            overlay.BringToFront();
+            overlay.Focus();
+        }
+    }
+
+    private void RefreshAllOverlays()
+    {
+        if (_overlays != null)
+        {
+            foreach (var overlay in _overlays)
+            {
+                overlay.Invalidate();
             }
-        };
-
-        _overlay.Show();
+        }
     }
 
     private void CaptureArea()
@@ -109,7 +184,7 @@ public class ScreenCapture : IDisposable
             using var graphics = Graphics.FromImage(bitmap);
             graphics.CopyFromScreen(_captureArea.Location, Point.Empty, _captureArea.Size);
 
-            CloseOverlay();
+            CloseOverlays();
             CaptureCompleted?.Invoke(this, bitmap);
         }
         catch (Exception ex)
@@ -122,10 +197,16 @@ public class ScreenCapture : IDisposable
     {
         try
         {
-            var bounds = Screen.PrimaryScreen?.Bounds ?? throw new InvalidOperationException("プライマリスクリーンが見つかりません。");
-            using var bitmap = new Bitmap(bounds.Width, bounds.Height, PixelFormat.Format32bppArgb);
+            // すべてのスクリーンを含む範囲を計算
+            var virtualScreen = new Rectangle(
+                SystemInformation.VirtualScreen.Left,
+                SystemInformation.VirtualScreen.Top,
+                SystemInformation.VirtualScreen.Width,
+                SystemInformation.VirtualScreen.Height);
+
+            using var bitmap = new Bitmap(virtualScreen.Width, virtualScreen.Height, PixelFormat.Format32bppArgb);
             using var graphics = Graphics.FromImage(bitmap);
-            graphics.CopyFromScreen(bounds.Location, Point.Empty, bounds.Size);
+            graphics.CopyFromScreen(virtualScreen.Location, Point.Empty, virtualScreen.Size);
 
             CaptureCompleted?.Invoke(this, bitmap);
         }
@@ -137,17 +218,23 @@ public class ScreenCapture : IDisposable
 
     private void CancelCapture()
     {
-        CloseOverlay();
+        CloseOverlays();
         CaptureCancelled?.Invoke(this, EventArgs.Empty);
     }
 
-    private void CloseOverlay()
+    private void CloseOverlays()
     {
-        if (_overlay != null && !_overlay.IsDisposed)
+        if (_overlays != null)
         {
-            _overlay.Close();
-            _overlay.Dispose();
-            _overlay = null;
+            foreach (var overlay in _overlays)
+            {
+                if (!overlay.IsDisposed)
+                {
+                    overlay.Close();
+                    overlay.Dispose();
+                }
+            }
+            _overlays = null;
         }
         _isCapturing = false;
     }
@@ -164,7 +251,7 @@ public class ScreenCapture : IDisposable
         {
             if (disposing)
             {
-                CloseOverlay();
+                CloseOverlays();
                 CaptureCompleted = null;
                 CaptureCancelled = null;
             }
