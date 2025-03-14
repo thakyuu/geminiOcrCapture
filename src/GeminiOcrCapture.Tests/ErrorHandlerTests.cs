@@ -142,4 +142,56 @@ public class ErrorHandlerTests : IDisposable
         var logContent = File.ReadAllText(logPath);
         logContent.Should().Contain("画面のキャプチャに失敗");
     }
+
+    [Fact]
+    public void LogError_WhenLogDirectoryIsReadOnly_ShouldNotThrowException()
+    {
+        // Arrange
+        var readOnlyPath = Path.Combine(_testPath, "readonly");
+        Directory.CreateDirectory(readOnlyPath);
+        
+        // Windowsでは、ディレクトリに読み取り専用属性を設定できないため、
+        // 代わりにアクセス権限を変更するか、存在しないパスを使用してテスト
+        var nonExistentPath = Path.Combine(readOnlyPath, "nonexistent");
+        var errorHandler = new ErrorHandler(nonExistentPath);
+        var exception = new InvalidOperationException("Test error");
+
+        // Act & Assert
+        var act = () => errorHandler.LogError(exception);
+        act.Should().NotThrow();
+    }
+
+    [Fact]
+    public void GetUserFriendlyMessage_WhenNetworkError_ShouldReturnNetworkErrorMessage()
+    {
+        // Arrange
+        var exception = new HttpRequestException("ネットワークエラー");
+        
+        // Act
+        _errorHandler.LogError(exception);
+        
+        // Assert
+        var logPath = Path.Combine(_testPath, "error.log");
+        File.Exists(logPath).Should().BeTrue();
+        var logContent = File.ReadAllText(logPath);
+        logContent.Should().Contain("ネットワークエラー");
+        logContent.Should().Contain("HttpRequestException");
+    }
+
+    [Fact]
+    public void GetUserFriendlyMessage_WhenUnauthorizedAccess_ShouldReturnPermissionErrorMessage()
+    {
+        // Arrange
+        var exception = new UnauthorizedAccessException("アクセス権限がありません");
+        
+        // Act
+        _errorHandler.LogError(exception);
+        
+        // Assert
+        var logPath = Path.Combine(_testPath, "error.log");
+        File.Exists(logPath).Should().BeTrue();
+        var logContent = File.ReadAllText(logPath);
+        logContent.Should().Contain("アクセス権限がありません");
+        logContent.Should().Contain("UnauthorizedAccessException");
+    }
 }

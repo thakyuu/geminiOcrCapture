@@ -134,4 +134,84 @@ public class GeminiServiceTests : IDisposable
         // Assert
         result.Should().BeFalse();
     }
+
+    [Fact]
+    public async Task AnalyzeImageAsync_WhenApiRequestFails_ShouldThrowOcrException()
+    {
+        // Arrange
+        var mockHttpClient = new Mock<IHttpClientWrapper>();
+        mockHttpClient.Setup(x => x.PostAsync(It.IsAny<string>(), It.IsAny<HttpContent>()))
+            .ReturnsAsync(new HttpResponseMessage
+            {
+                StatusCode = System.Net.HttpStatusCode.BadRequest,
+                Content = new StringContent(JsonSerializer.Serialize(new
+                {
+                    error = new
+                    {
+                        message = "Invalid request"
+                    }
+                }))
+            });
+
+        var service = new GeminiService(_mockConfigManager.Object, mockHttpClient.Object);
+        using var image = new Bitmap(100, 100);
+
+        // Act
+        var act = () => service.AnalyzeImageAsync(image);
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*リクエストが不正です*");
+    }
+
+    [Fact]
+    public async Task AnalyzeImageAsync_WhenDifferentLanguageIsSet_ShouldUseCorrectLanguageInRequest()
+    {
+        // Arrange
+        var mockConfigManager = new Mock<ConfigManager>();
+        mockConfigManager.Setup(x => x.CurrentConfig)
+            .Returns(new ConfigManager.Config
+            {
+                ApiKey = "test-api-key",
+                Language = "en"
+            });
+
+        var mockHttpClient = new Mock<IHttpClientWrapper>();
+        HttpContent? capturedContent = null;
+        
+        mockHttpClient.Setup(x => x.PostAsync(It.IsAny<string>(), It.IsAny<HttpContent>()))
+            .Callback<string, HttpContent>((url, content) => capturedContent = content)
+            .ReturnsAsync(new HttpResponseMessage
+            {
+                StatusCode = System.Net.HttpStatusCode.OK,
+                Content = new StringContent(JsonSerializer.Serialize(new
+                {
+                    candidates = new[]
+                    {
+                        new
+                        {
+                            content = new
+                            {
+                                parts = new[]
+                                {
+                                    new { text = "OCR result" }
+                                }
+                            }
+                        }
+                    }
+                }))
+            });
+
+        var service = new GeminiService(mockConfigManager.Object, mockHttpClient.Object);
+        using var image = new Bitmap(100, 100);
+
+        // Act
+        await service.AnalyzeImageAsync(image);
+
+        // Assert
+        capturedContent.Should().NotBeNull();
+        var contentString = await capturedContent!.ReadAsStringAsync();
+        contentString.Should().Contain("en");
+        contentString.Should().NotContain("ja");
+    }
 }

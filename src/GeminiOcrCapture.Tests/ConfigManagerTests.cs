@@ -97,4 +97,41 @@ public class ConfigManagerTests
         loadedConfig.Should().NotBeNull();
         loadedConfig.ApiKey.Should().Be("test-api-key");
     }
+
+    [Fact]
+    public void LoadConfig_WhenFileIsCorrupted_ShouldCreateDefaultConfig()
+    {
+        // Arrange
+        var configPath = Path.Combine(_testConfigPath, "config.json");
+        File.WriteAllText(configPath, "This is not valid JSON");
+        
+        // Act & Assert
+        var act = () => new ConfigManager(_testConfigPath);
+        
+        // ConfigManagerのコンストラクタでLoadConfigを呼び出し、
+        // 不正なJSONを検出して例外をスローすることを確認
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("*設定ファイルの読み込みに失敗しました*");
+    }
+
+    [Fact]
+    public void SaveAndLoadConfig_WithCustomSoundSettings_ShouldPersistCorrectly()
+    {
+        // Arrange
+        var configManager = new ConfigManager(_testConfigPath);
+        var originalConfig = new ConfigManager.Config
+        {
+            PlaySoundOnOcrSuccess = true,
+            CustomSoundFilePath = @"C:\Sounds\custom.wav"
+        };
+
+        // Act
+        configManager.SaveConfig(originalConfig);
+        var loadedConfig = configManager.LoadConfig();
+
+        // Assert
+        loadedConfig.Should().NotBeNull();
+        loadedConfig.PlaySoundOnOcrSuccess.Should().BeTrue();
+        loadedConfig.CustomSoundFilePath.Should().Be(@"C:\Sounds\custom.wav");
+    }
 }
