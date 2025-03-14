@@ -1,5 +1,6 @@
 using GeminiOcrCapture.Core;
 using System.Drawing;
+using System.Diagnostics;
 
 namespace GeminiOcrCapture;
 
@@ -106,8 +107,16 @@ public partial class MainForm : Form
             }
             catch (Exception ex)
             {
-                _errorHandler.HandleError(ex, "OCR処理に失敗しました。");
-                Application.Exit();
+                // APIエラーの場合は専用ダイアログを表示
+                if (IsApiError(ex))
+                {
+                    HandleApiError(ex, image);
+                }
+                else
+                {
+                    _errorHandler.HandleError(ex, "OCR処理に失敗しました。");
+                    Application.Exit();
+                }
             }
         };
 
@@ -115,6 +124,142 @@ public partial class MainForm : Form
         {
             Application.Exit();
         };
+    }
+
+    /// <summary>
+    /// 例外がAPIエラーかどうかを判定します
+    /// </summary>
+    private bool IsApiError(Exception ex)
+    {
+        // APIエラーの判定条件
+        return ex is InvalidOperationException && 
+               (ex.Message.Contains("API") || 
+                ex.Message.Contains("キー") || 
+                ex.Message.Contains("認証"));
+    }
+
+    /// <summary>
+    /// APIエラーを処理します
+    /// </summary>
+    private void HandleApiError(Exception ex, Image capturedImage)
+    {
+        // エラーをログに記録
+        _errorHandler.LogError(ex, "Gemini APIエラーが発生しました。");
+
+        // APIエラーダイアログを表示
+        using var dialog = new ApiErrorDialog(_configManager, ex.Message);
+        var result = dialog.ShowDialog();
+
+        switch (result)
+        {
+            case DialogResult.Retry:
+                // 再試行
+                RetryOcrProcess(capturedImage);
+                break;
+            
+            case DialogResult.Yes:
+                // APIキーが更新されたので再試行
+                RetryOcrProcess(capturedImage);
+                break;
+            
+            default:
+                // 終了
+                Application.Exit();
+                break;
+        }
+    }
+
+    /// <summary>
+    /// OCR処理を再試行します
+    /// </summary>
+    private async void RetryOcrProcess(Image capturedImage)
+    {
+        try
+        {
+            // 設定ファイルを再読み込み（APIキーが確実に読み込まれるようにするため）
+            _configManager.LoadConfig();
+            
+            // GeminiServiceを再初期化する前に、既存のインスタンスを破棄
+            if (_geminiService != null)
+            {
+                try
+                {
+                    _geminiService.Dispose();
+                }
+                catch (Exception disposeEx)
+                {
+                    Debug.WriteLine($"GeminiServiceの破棄中にエラーが発生しました: {disposeEx.Message}");
+                }
+                // nullに設定する前に型を明示的に指定
+                _geminiService = null!;
+            }
+            
+            try
+            {
+                // GeminiServiceを再初期化
+                InitializeGeminiService();
+            }
+            catch (Exception initEx)
+            {
+                throw new InvalidOperationException($"Gemini APIサービスの再初期化に失敗しました: {initEx.Message}", initEx);
+            }
+            
+            // APIキーの検証が完了するまで少し待機
+            System.Threading.Thread.Sleep(500);
+            
+            // OCR処理を再実行
+            Debug.WriteLine("OCR処理を再試行します。");
+            
+            // _geminiServiceがnullでないことを確認
+            if (_geminiService == null)
+            {
+                throw new InvalidOperationException("Gemini APIサービスが初期化されていません。");
+            }
+            
+            var text = await _geminiService.AnalyzeImageAsync(capturedImage);
+            Debug.WriteLine("OCR処理が成功しました。");
+            
+            Clipboard.SetText(text);
+            
+            if (_configManager.CurrentConfig.DisplayOcrResult)
+            {
+                MessageBox.Show(text, "OCR結果", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+
+            Application.Exit();
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"再試行中にエラーが発生しました: {ex.Message}");
+            if (ex.InnerException != null)
+            {
+                Debug.WriteLine($"内部例外: {ex.InnerException.Message}");
+            }
+            
+            // APIエラーの場合は専用ダイアログを表示
+            if (IsApiError(ex))
+            {
+                HandleApiError(ex, capturedImage);
+            }
+            else
+            {
+                // より詳細なエラーメッセージを表示
+                string errorMessage = $"OCR処理の再試行に失敗しました。\n\nエラー詳細: {ex.Message}";
+                if (ex.InnerException != null)
+                {
+                    errorMessage += $"\n\n内部エラー: {ex.InnerException.Message}";
+                }
+                
+                MessageBox.Show(
+                    errorMessage,
+                    "エラー",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
+                
+                _errorHandler.LogError(ex, "OCR処理の再試行に失敗しました。");
+                Application.Exit();
+            }
+        }
     }
 
     /// <summary>

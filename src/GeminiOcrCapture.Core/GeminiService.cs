@@ -59,11 +59,20 @@ public class GeminiService : IDisposable
         try
         {
             Debug.WriteLine("画像の解析を開始します。");
-            Debug.WriteLine($"使用するAPIキー: {apiKey.Substring(0, 3)}...{apiKey.Substring(apiKey.Length - 3)}");
+            Debug.WriteLine($"使用するAPIキー: {apiKey.Substring(0, Math.Min(3, apiKey.Length))}...{apiKey.Substring(Math.Max(0, apiKey.Length - 3))}");
             
             // 画像をBase64に変換
             using var ms = new MemoryStream();
-            image.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
+            try
+            {
+                image.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"画像の変換に失敗しました: {ex.Message}");
+                throw new InvalidOperationException("画像の変換に失敗しました。", ex);
+            }
+            
             var base64Image = Convert.ToBase64String(ms.ToArray());
             Debug.WriteLine($"画像をBase64に変換しました。サイズ: {base64Image.Length} 文字");
 
@@ -106,9 +115,23 @@ public class GeminiService : IDisposable
 
             // APIリクエストの送信
             Debug.WriteLine($"APIリクエストを送信します: {API_BASE_URL}?key=********");
-            var response = await _httpClient.PostAsync(
-                $"{API_BASE_URL}?key={apiKey}",
-                content);
+            HttpResponseMessage response;
+            try
+            {
+                response = await _httpClient.PostAsync(
+                    $"{API_BASE_URL}?key={apiKey}",
+                    content);
+            }
+            catch (HttpRequestException ex)
+            {
+                Debug.WriteLine($"HTTP通信エラーが発生しました: {ex.Message}");
+                throw new InvalidOperationException($"ネットワークエラーが発生しました。インターネット接続を確認してください。詳細: {ex.Message}", ex);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"APIリクエスト送信中に予期せぬエラーが発生しました: {ex.Message}");
+                throw new InvalidOperationException($"APIリクエスト送信中に予期せぬエラーが発生しました。詳細: {ex.Message}", ex);
+            }
 
             if (!response.IsSuccessStatusCode)
             {
@@ -196,13 +219,13 @@ public class GeminiService : IDisposable
             {
                 Debug.WriteLine($"レスポンスの解析に失敗しました: {ex.Message}");
                 Debug.WriteLine($"レスポンス内容: {responseContent}");
-                throw new InvalidOperationException("APIレスポンスの解析に失敗しました。APIの仕様が変更された可能性があります。", ex);
+                throw new InvalidOperationException($"APIレスポンスの解析に失敗しました。APIの仕様が変更された可能性があります。詳細: {ex.Message}", ex);
             }
         }
         catch (HttpRequestException ex)
         {
             Debug.WriteLine($"HTTP通信エラーが発生しました: {ex.Message}");
-            throw new InvalidOperationException("ネットワークエラーが発生しました。インターネット接続を確認してください。", ex);
+            throw new InvalidOperationException($"ネットワークエラーが発生しました。インターネット接続を確認してください。詳細: {ex.Message}", ex);
         }
         catch (Exception ex)
         {
@@ -213,7 +236,7 @@ public class GeminiService : IDisposable
                 Debug.WriteLine($"内部例外: {ex.InnerException.Message}");
                 Debug.WriteLine($"内部例外のスタックトレース: {ex.InnerException.StackTrace}");
             }
-            throw new InvalidOperationException("画像の解析に失敗しました。" + ex.Message, ex);
+            throw new InvalidOperationException($"画像の解析に失敗しました。{ex.Message}", ex);
         }
     }
 
