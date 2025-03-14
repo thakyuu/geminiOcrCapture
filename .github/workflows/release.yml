@@ -25,7 +25,7 @@ jobs:
     
     - name: Test
       run: |
-        dotnet test --configuration Release --no-build --logger "console;verbosity=detailed" --collect:"XPlat Code Coverage" /p:VSTestTimeout=300000
+        dotnet test --configuration Release --no-build --logger "console;verbosity=detailed" --collect:"XPlat Code Coverage" --blame-hang-timeout 2m --blame-crash
       timeout-minutes: 5
     
     - name: Publish
