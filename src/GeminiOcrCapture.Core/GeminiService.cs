@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.IO;
+using System.Diagnostics;
 
 namespace GeminiOcrCapture.Core;
 
@@ -23,7 +24,7 @@ public class GeminiService : IDisposable
 {
     private readonly ConfigManager _configManager;
     private readonly IHttpClientWrapper _httpClient;
-    private const string API_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro-vision:generateContent";
+    private const string API_BASE_URL = "https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent";
 
     public GeminiService(ConfigManager configManager, IHttpClientWrapper? httpClient = null)
     {
@@ -33,16 +34,51 @@ public class GeminiService : IDisposable
             throw new InvalidOperationException("APIキーが設定されていません。");
         }
         _httpClient = httpClient ?? new HttpClientWrapper();
+        
+        // APIキーの検証を非同期で実行
+        Task.Run(async () =>
+        {
+            try
+            {
+                Debug.WriteLine("APIキーの検証を開始します。");
+                var isValid = await ValidateApiKeyAsync(_configManager.CurrentConfig.ApiKey);
+                if (!isValid)
+                {
+                    Debug.WriteLine("APIキーが無効です。");
+                    throw new InvalidOperationException("APIキーが無効です。設定を確認してください。");
+                }
+                Debug.WriteLine("APIキーの検証が成功しました。");
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"APIキーの検証中にエラーが発生しました: {ex.Message}");
+            }
+        });
     }
 
     public async Task<string> AnalyzeImageAsync(Image image)
     {
+        if (image == null)
+        {
+            throw new ArgumentNullException(nameof(image));
+        }
+
         try
         {
+            Debug.WriteLine("画像の解析を開始します。");
+            
             // 画像をBase64に変換
             using var ms = new MemoryStream();
             image.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
             var base64Image = Convert.ToBase64String(ms.ToArray());
+            Debug.WriteLine($"画像をBase64に変換しました。サイズ: {base64Image.Length} 文字");
+
+            // APIキーの検証
+            if (string.IsNullOrEmpty(_configManager.CurrentConfig.ApiKey))
+            {
+                Debug.WriteLine("APIキーが設定されていません。");
+                throw new InvalidOperationException("APIキーが設定されていません。設定画面からAPIキーを設定してください。");
+            }
 
             // リクエストの構築
             var request = new
@@ -55,7 +91,7 @@ public class GeminiService : IDisposable
                         {
                             new RequestPart
                             {
-                                text = $"この画像から文字を抽出してください。言語は{_configManager.CurrentConfig.Language}です。"
+                                text = $"この画像に含まれるすべてのテキストを抽出してください。レイアウトは無視して、テキストのみを抽出してください。言語は{_configManager.CurrentConfig.Language}です。"
                             },
                             new RequestPart
                             {
@@ -67,13 +103,22 @@ public class GeminiService : IDisposable
                             }
                         }
                     }
+                },
+                generationConfig = new
+                {
+                    temperature = 0.0,
+                    topP = 0.1,
+                    topK = 16,
+                    maxOutputTokens = 2048
                 }
             };
 
             var json = JsonSerializer.Serialize(request);
+            Debug.WriteLine("リクエストJSONを作成しました。");
             var content = new StringContent(json, Encoding.UTF8, "application/json");
 
             // APIリクエストの送信
+            Debug.WriteLine($"APIリクエストを送信します: {API_BASE_URL}?key=********");
             var response = await _httpClient.PostAsync(
                 $"{API_BASE_URL}?key={_configManager.CurrentConfig.ApiKey}",
                 content);
@@ -81,25 +126,107 @@ public class GeminiService : IDisposable
             if (!response.IsSuccessStatusCode)
             {
                 var errorContent = await response.Content.ReadAsStringAsync();
-                throw new InvalidOperationException($"API呼び出しに失敗しました。ステータスコード: {response.StatusCode}, エラー: {errorContent}");
+                Debug.WriteLine($"APIリクエストが失敗しました。ステータスコード: {response.StatusCode}, エラー: {errorContent}");
+                
+                // エラーメッセージの詳細化
+                string errorMessage = $"API呼び出しに失敗しました。ステータスコード: {response.StatusCode}";
+                
+                if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+                {
+                    errorMessage = "APIキーが無効です。設定画面から正しいAPIキーを設定してください。";
+                }
+                else if (response.StatusCode == System.Net.HttpStatusCode.BadRequest)
+                {
+                    // BadRequestの詳細なエラーメッセージを解析
+                    try
+                    {
+                        var errorJson = JsonSerializer.Deserialize<JsonElement>(errorContent);
+                        if (errorJson.TryGetProperty("error", out var errorObj) && 
+                            errorObj.TryGetProperty("message", out var messageObj))
+                        {
+                            var message = messageObj.GetString();
+                            if (message?.Contains("quota") == true)
+                            {
+                                errorMessage = "APIクォータを超過しました。Google Cloud Consoleで課金設定を確認してください。";
+                            }
+                            else if (message?.Contains("model not found") == true || message?.Contains("Model gemini-flash is not supported") == true)
+                            {
+                                errorMessage = "Gemini 2.0 Flashモデルが利用できません。Google Cloud ConsoleでGemini APIが有効化されているか確認してください。";
+                            }
+                            else
+                            {
+                                errorMessage = $"リクエストが不正です: {message}";
+                            }
+                        }
+                        else
+                        {
+                            errorMessage = "リクエストが不正です。画像サイズが大きすぎる可能性があります。";
+                        }
+                    }
+                    catch
+                    {
+                        errorMessage = "リクエストが不正です。画像サイズが大きすぎる可能性があります。";
+                    }
+                }
+                else if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
+                {
+                    errorMessage = "APIリクエストの制限に達しました。しばらく待ってから再試行してください。";
+                }
+                else if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+                {
+                    errorMessage = "APIエンドポイントが見つかりません。Gemini APIの有効化とAPIキーの設定を確認してください。";
+                }
+                
+                throw new InvalidOperationException(errorMessage);
             }
 
+            Debug.WriteLine("APIリクエストが成功しました。レスポンスを解析します。");
             var responseContent = await response.Content.ReadAsStringAsync();
-            var responseObject = JsonSerializer.Deserialize<JsonElement>(responseContent);
+            Debug.WriteLine($"レスポンス: {responseContent}");
             
-            // レスポンスから生成されたテキストを抽出
-            var text = responseObject
-                .GetProperty("candidates")[0]
-                .GetProperty("content")
-                .GetProperty("parts")[0]
-                .GetProperty("text")
-                .GetString();
-
-            return text ?? "テキストの抽出に失敗しました。";
+            try
+            {
+                var responseObject = JsonSerializer.Deserialize<JsonElement>(responseContent);
+                
+                // レスポンスから生成されたテキストを抽出
+                string? text = null;
+                
+                // Gemini 2.0 Flashモデルのレスポンス形式に対応
+                if (responseObject.TryGetProperty("candidates", out var candidates) && 
+                    candidates.GetArrayLength() > 0 &&
+                    candidates[0].TryGetProperty("content", out var contentObj) &&
+                    contentObj.TryGetProperty("parts", out var parts) &&
+                    parts.GetArrayLength() > 0 &&
+                    parts[0].TryGetProperty("text", out var textElement))
+                {
+                    text = textElement.GetString();
+                }
+                
+                Debug.WriteLine($"抽出されたテキスト: {text}");
+                return text ?? "テキストの抽出に失敗しました。";
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"レスポンスの解析に失敗しました: {ex.Message}");
+                Debug.WriteLine($"レスポンス内容: {responseContent}");
+                throw new InvalidOperationException("APIレスポンスの解析に失敗しました。APIの仕様が変更された可能性があります。", ex);
+            }
+        }
+        catch (HttpRequestException ex)
+        {
+            Debug.WriteLine($"HTTP通信エラーが発生しました: {ex.Message}");
+            throw new InvalidOperationException("ネットワークエラーが発生しました。インターネット接続を確認してください。", ex);
         }
         catch (Exception ex)
         {
-            throw new InvalidOperationException("画像の解析に失敗しました。", ex);
+            Debug.WriteLine($"画像の解析中にエラーが発生しました: {ex.Message}");
+            Debug.WriteLine($"スタックトレース: {ex.StackTrace}");
+            if (ex.InnerException != null)
+            {
+                Debug.WriteLine($"内部例外: {ex.InnerException.Message}");
+                Debug.WriteLine($"内部例外のスタックトレース: {ex.InnerException.StackTrace}");
+            }
+            throw new InvalidOperationException("画像の解析に失敗しました。" + ex.Message, ex);
         }
     }
 
@@ -107,14 +234,21 @@ public class GeminiService : IDisposable
     {
         try
         {
-            using var client = new HttpClient();
-            client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-
-            var response = await client.GetAsync($"https://generativelanguage.googleapis.com/v1beta/models?key={apiKey}");
+            Debug.WriteLine($"APIキーの検証リクエストを送信します: https://generativelanguage.googleapis.com/v1/models?key=********");
+            var response = await _httpClient.GetAsync($"https://generativelanguage.googleapis.com/v1/models?key={apiKey}");
+            Debug.WriteLine($"APIキーの検証レスポンス: ステータスコード {response.StatusCode}");
+            
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                Debug.WriteLine($"APIキーの検証に失敗しました: {errorContent}");
+            }
+            
             return response.IsSuccessStatusCode;
         }
-        catch
+        catch (Exception ex)
         {
+            Debug.WriteLine($"APIキーの検証中に例外が発生しました: {ex.Message}");
             return false;
         }
     }

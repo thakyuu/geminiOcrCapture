@@ -4,12 +4,13 @@ using System.Drawing.Imaging;
 
 namespace GeminiOcrCapture.Core;
 
-public class ScreenCapture
+public class ScreenCapture : IDisposable
 {
     private Rectangle _captureArea;
     private Form? _overlay;
     private bool _isCapturing;
     private Point _startPoint;
+    private bool _disposed;
 
     public event EventHandler<Image>? CaptureCompleted;
     public event EventHandler? CaptureCancelled;
@@ -149,5 +150,30 @@ public class ScreenCapture
             _overlay = null;
         }
         _isCapturing = false;
+    }
+
+    public void Dispose()
+    {
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if (!_disposed)
+        {
+            if (disposing)
+            {
+                CloseOverlay();
+                CaptureCompleted = null;
+                CaptureCancelled = null;
+            }
+            _disposed = true;
+        }
+    }
+
+    ~ScreenCapture()
+    {
+        Dispose(false);
     }
 }

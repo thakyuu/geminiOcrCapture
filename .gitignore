@@ -7,3 +7,21 @@ obj/
 
 # Visual Studio files
 *.vs/
+
+# Configuration files
+config.json
+
+# Environment variables
+.env
+
+# VSCode settings
+.vscode/
+
+# NuGet packages
+packages/
+
+# Test results
+TestResults/
+
+# Coverage results
+coverage.xml

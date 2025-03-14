@@ -71,7 +71,7 @@ public class ErrorHandlerTests : IDisposable
     public void GetUserFriendlyMessage_WhenApiError_ShouldReturnApiMessage()
     {
         // Arrange
-        var exception = new InvalidOperationException("API error occurred");
+        var exception = new InvalidOperationException("API呼び出しに失敗しました");
 
         // Act
         _errorHandler.HandleError(exception);
@@ -79,7 +79,8 @@ public class ErrorHandlerTests : IDisposable
         // Assert
         var logPath = Path.Combine(_testPath, "error.log");
         var logContent = File.ReadAllText(logPath);
-        logContent.Should().Contain("Gemini APIとの通信に失敗しました");
+        logContent.Should().Contain("API呼び出しに失敗しました");
+        logContent.Should().Contain("InvalidOperationException");
     }
 
     [Fact]

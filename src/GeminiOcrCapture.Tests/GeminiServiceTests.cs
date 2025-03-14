@@ -2,13 +2,15 @@ using System.Drawing;
 using FluentAssertions;
 using GeminiOcrCapture.Core;
 using Moq;
+using System.Net.Http;
+using System.Text.Json;
 
 namespace GeminiOcrCapture.Tests;
 
-public class GeminiServiceTests
+public class GeminiServiceTests : IDisposable
 {
     private readonly Mock<ConfigManager> _mockConfigManager;
-    private readonly Mock<HttpClient> _mockHttpClient;
+    private readonly Mock<IHttpClientWrapper> _mockHttpClient;
     private readonly GeminiService _geminiService;
 
     public GeminiServiceTests()
@@ -21,15 +23,35 @@ public class GeminiServiceTests
                 Language = "ja"
             });
 
-        _mockHttpClient = new Mock<HttpClient>();
-        _mockHttpClient.Setup(x => x.SendAsync(It.IsAny<HttpRequestMessage>()))
+        _mockHttpClient = new Mock<IHttpClientWrapper>();
+        _mockHttpClient.Setup(x => x.PostAsync(It.IsAny<string>(), It.IsAny<HttpContent>()))
             .ReturnsAsync(new HttpResponseMessage
             {
                 StatusCode = System.Net.HttpStatusCode.OK,
-                Content = new StringContent("{\"text\": \"OCR結果\"}")
+                Content = new StringContent(JsonSerializer.Serialize(new
+                {
+                    candidates = new[]
+                    {
+                        new
+                        {
+                            content = new
+                            {
+                                parts = new[]
+                                {
+                                    new { text = "OCR結果" }
+                                }
+                            }
+                        }
+                    }
+                }))
             });
 
         _geminiService = new GeminiService(_mockConfigManager.Object, _mockHttpClient.Object);
+    }
+
+    public void Dispose()
+    {
+        _geminiService.Dispose();
     }
 
     [Fact]
@@ -56,7 +78,7 @@ public class GeminiServiceTests
         var result = await _geminiService.AnalyzeImageAsync(image);
 
         // Assert
-        result.Should().NotBeNullOrEmpty();
+        result.Should().Be("OCR結果");
     }
 
     [Fact]
@@ -72,8 +94,15 @@ public class GeminiServiceTests
     [Fact]
     public async Task ValidateApiKeyAsync_WhenKeyIsValid_ShouldReturnTrue()
     {
+        // Arrange
+        var mockHttpClient = new Mock<IHttpClientWrapper>();
+        mockHttpClient.Setup(x => x.GetAsync(It.IsAny<string>()))
+            .ReturnsAsync(new HttpResponseMessage { StatusCode = System.Net.HttpStatusCode.OK });
+
+        var service = new GeminiService(_mockConfigManager.Object, mockHttpClient.Object);
+
         // Act
-        var result = await _geminiService.ValidateApiKeyAsync("test-api-key");
+        var result = await service.ValidateApiKeyAsync("test-api-key");
 
         // Assert
         result.Should().BeTrue();
@@ -82,8 +111,15 @@ public class GeminiServiceTests
     [Fact]
     public async Task ValidateApiKeyAsync_WhenKeyIsInvalid_ShouldReturnFalse()
     {
+        // Arrange
+        var mockHttpClient = new Mock<IHttpClientWrapper>();
+        mockHttpClient.Setup(x => x.GetAsync(It.IsAny<string>()))
+            .ReturnsAsync(new HttpResponseMessage { StatusCode = System.Net.HttpStatusCode.Unauthorized });
+
+        var service = new GeminiService(_mockConfigManager.Object, mockHttpClient.Object);
+
         // Act
-        var result = await _geminiService.ValidateApiKeyAsync("invalid-api-key");
+        var result = await service.ValidateApiKeyAsync("invalid-api-key");
 
         // Assert
         result.Should().BeFalse();
