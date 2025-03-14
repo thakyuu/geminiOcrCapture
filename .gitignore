@@ -1,0 +1,9 @@
+# Build artifacts
+bin/
+obj/
+
+# User-specific files
+*.csproj.user
+
+# Visual Studio files
+*.vs/
