@@ -112,6 +112,17 @@ public partial class ApiKeyForm : Form
         {
             var config = _configManager.CurrentConfig;
             config.ApiKey = _apiKeyTextBox.Text;
+            
+            // APIキー設定後に通知設定ダイアログを表示
+            if (ShowNotificationSettingDialog())
+            {
+                config.DisplayOcrResult = true;
+            }
+            else
+            {
+                config.DisplayOcrResult = false;
+            }
+            
             _configManager.SaveConfig(config);
         }
         catch (Exception ex)
@@ -123,6 +134,24 @@ public partial class ApiKeyForm : Form
                 MessageBoxIcon.Error);
             this.DialogResult = DialogResult.None;
         }
+    }
+
+    /// <summary>
+    /// 通知設定ダイアログを表示します
+    /// </summary>
+    /// <returns>通知を有効にする場合はtrue、無効にする場合はfalse</returns>
+    private bool ShowNotificationSettingDialog()
+    {
+        var result = MessageBox.Show(
+            "OCR結果をポップアップ通知で表示しますか？\n\n" +
+            "「はい」：OCR結果をポップアップ通知で表示します\n" +
+            "「いいえ」：OCR結果をクリップボードにコピーするだけで通知は表示しません",
+            "通知設定",
+            MessageBoxButtons.YesNo,
+            MessageBoxIcon.Question,
+            MessageBoxDefaultButton.Button1);
+            
+        return result == DialogResult.Yes;
     }
 
     /// <summary>

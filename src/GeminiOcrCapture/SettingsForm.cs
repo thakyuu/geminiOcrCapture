@@ -15,6 +15,7 @@ public class SettingsForm : Form
     private Button _saveButton = new Button();
     private Button _cancelButton = new Button();
     private LinkLabel _getApiKeyLink = new LinkLabel();
+    private bool _isInitialSetup = false;
 
     /// <summary>
     /// 設定フォームのコンストラクタ
@@ -25,6 +26,9 @@ public class SettingsForm : Form
         _configManager = configManager;
         InitializeComponents();
         LoadCurrentSettings();
+        
+        // APIキーが未設定の場合は初期設定モードとする
+        _isInitialSetup = string.IsNullOrWhiteSpace(_configManager.CurrentConfig.ApiKey);
     }
 
     /// <summary>
@@ -159,9 +163,29 @@ public class SettingsForm : Form
         try
         {
             var config = _configManager.CurrentConfig;
+            bool isNewApiKey = string.IsNullOrWhiteSpace(config.ApiKey) && !string.IsNullOrWhiteSpace(_apiKeyTextBox.Text);
+            
             config.ApiKey = _apiKeyTextBox.Text;
-            config.DisplayOcrResult = _displayResultCheckBox.Checked;
             config.Language = _languageComboBox.SelectedItem?.ToString() ?? "ja";
+            
+            // 初期設定時はDisplayOcrResultの設定をダイアログで確認する
+            if (_isInitialSetup || isNewApiKey)
+            {
+                if (ShowNotificationSettingDialog())
+                {
+                    config.DisplayOcrResult = true;
+                }
+                else
+                {
+                    config.DisplayOcrResult = false;
+                }
+            }
+            else
+            {
+                // 通常の設定変更時はチェックボックスの値を使用
+                config.DisplayOcrResult = _displayResultCheckBox.Checked;
+            }
+            
             _configManager.SaveConfig(config);
 
             MessageBox.Show(
@@ -179,6 +203,24 @@ public class SettingsForm : Form
                 MessageBoxIcon.Error);
             this.DialogResult = DialogResult.None;
         }
+    }
+
+    /// <summary>
+    /// 通知設定ダイアログを表示します
+    /// </summary>
+    /// <returns>通知を有効にする場合はtrue、無効にする場合はfalse</returns>
+    private bool ShowNotificationSettingDialog()
+    {
+        var result = MessageBox.Show(
+            "OCR結果をポップアップ通知で表示しますか？\n\n" +
+            "「はい」：OCR結果をポップアップ通知で表示します\n" +
+            "「いいえ」：OCR結果をクリップボードにコピーするだけで通知は表示しません",
+            "通知設定",
+            MessageBoxButtons.YesNo,
+            MessageBoxIcon.Question,
+            MessageBoxDefaultButton.Button1);
+            
+        return result == DialogResult.Yes;
     }
 
     /// <summary>
