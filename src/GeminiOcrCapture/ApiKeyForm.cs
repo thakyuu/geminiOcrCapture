@@ -1,5 +1,6 @@
 using GeminiOcrCapture.Core;
 using System.Drawing;
+using System.Windows.Forms;
 
 namespace GeminiOcrCapture;
 
@@ -123,6 +124,44 @@ public partial class ApiKeyForm : Form
                 config.DisplayOcrResult = false;
             }
             
+            // 通知音設定ダイアログを表示
+            if (ShowSoundSettingDialog())
+            {
+                config.PlaySoundOnOcrSuccess = true;
+                
+                // カスタム通知音ファイルを設定するか確認
+                if (ShowCustomSoundFileDialog())
+                {
+                    using var dialog = new OpenFileDialog
+                    {
+                        Title = "通知音ファイルを選択",
+                        Filter = "音声ファイル (*.wav)|*.wav|すべてのファイル (*.*)|*.*",
+                        FilterIndex = 1,
+                        CheckFileExists = true
+                    };
+                    
+                    if (dialog.ShowDialog() == DialogResult.OK)
+                    {
+                        config.CustomSoundFilePath = dialog.FileName;
+                    }
+                    else
+                    {
+                        // ファイル選択がキャンセルされた場合は標準の通知音を使用
+                        config.CustomSoundFilePath = null;
+                    }
+                }
+                else
+                {
+                    // 標準の通知音を使用
+                    config.CustomSoundFilePath = null;
+                }
+            }
+            else
+            {
+                config.PlaySoundOnOcrSuccess = false;
+                config.CustomSoundFilePath = null;
+            }
+            
             _configManager.SaveConfig(config);
         }
         catch (Exception ex)
@@ -150,6 +189,42 @@ public partial class ApiKeyForm : Form
             MessageBoxButtons.YesNo,
             MessageBoxIcon.Question,
             MessageBoxDefaultButton.Button1);
+            
+        return result == DialogResult.Yes;
+    }
+    
+    /// <summary>
+    /// 通知音設定ダイアログを表示します
+    /// </summary>
+    /// <returns>通知音を有効にする場合はtrue、無効にする場合はfalse</returns>
+    private bool ShowSoundSettingDialog()
+    {
+        var result = MessageBox.Show(
+            "OCR成功時に通知音を鳴らしますか？\n\n" +
+            "「はい」：OCR成功時に通知音を鳴らします\n" +
+            "「いいえ」：通知音を鳴らしません",
+            "通知音設定",
+            MessageBoxButtons.YesNo,
+            MessageBoxIcon.Question,
+            MessageBoxDefaultButton.Button1);
+            
+        return result == DialogResult.Yes;
+    }
+
+    /// <summary>
+    /// カスタム通知音ファイル設定ダイアログを表示します
+    /// </summary>
+    /// <returns>カスタム通知音ファイルを設定する場合はtrue、標準の通知音を使用する場合はfalse</returns>
+    private bool ShowCustomSoundFileDialog()
+    {
+        var result = MessageBox.Show(
+            "カスタム通知音ファイルを設定しますか？\n\n" +
+            "「はい」：カスタム通知音ファイルを選択します\n" +
+            "「いいえ」：標準の通知音（ビープ音）を使用します",
+            "通知音ファイル設定",
+            MessageBoxButtons.YesNo,
+            MessageBoxIcon.Question,
+            MessageBoxDefaultButton.Button2);
             
         return result == DialogResult.Yes;
     }

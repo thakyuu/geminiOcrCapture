@@ -11,6 +11,9 @@ public class SettingsForm : Form
     private readonly ConfigManager _configManager;
     private TextBox _apiKeyTextBox = new TextBox();
     private CheckBox _displayResultCheckBox = new CheckBox();
+    private CheckBox _playSoundCheckBox = new CheckBox();
+    private TextBox _soundFilePathTextBox = new TextBox();
+    private Button _browseSoundFileButton = new Button();
     private ComboBox _languageComboBox = new ComboBox();
     private Button _saveButton = new Button();
     private Button _cancelButton = new Button();
@@ -38,7 +41,7 @@ public class SettingsForm : Form
     {
         this.Text = "設定";
         this.Width = 450;
-        this.Height = 300;
+        this.Height = 350;
         this.FormBorderStyle = FormBorderStyle.FixedDialog;
         this.MaximizeBox = false;
         this.MinimizeBox = false;
@@ -86,7 +89,7 @@ public class SettingsForm : Form
             Text = "表示設定",
             Location = new Point(10, 150),
             Width = 410,
-            Height = 70
+            Height = 150
         };
 
         _displayResultCheckBox.Text = "OCR結果をポップアップ表示する";
@@ -94,6 +97,40 @@ public class SettingsForm : Form
         _displayResultCheckBox.Width = 250;
         _displayResultCheckBox.Checked = true;
         displayGroupBox.Controls.Add(_displayResultCheckBox);
+
+        _playSoundCheckBox.Text = "OCR成功時に通知音を鳴らす";
+        _playSoundCheckBox.Location = new Point(10, 50);
+        _playSoundCheckBox.Width = 250;
+        _playSoundCheckBox.Checked = true;
+        _playSoundCheckBox.CheckedChanged += PlaySoundCheckBox_CheckedChanged;
+        displayGroupBox.Controls.Add(_playSoundCheckBox);
+
+        var soundFileLabel = new Label
+        {
+            Text = "通知音ファイル:",
+            Location = new Point(30, 80),
+            Width = 100
+        };
+        displayGroupBox.Controls.Add(soundFileLabel);
+
+        _soundFilePathTextBox.Location = new Point(130, 77);
+        _soundFilePathTextBox.Width = 200;
+        displayGroupBox.Controls.Add(_soundFilePathTextBox);
+
+        _browseSoundFileButton.Text = "参照...";
+        _browseSoundFileButton.Location = new Point(335, 76);
+        _browseSoundFileButton.Width = 60;
+        _browseSoundFileButton.Click += BrowseSoundFileButton_Click;
+        displayGroupBox.Controls.Add(_browseSoundFileButton);
+
+        var soundFileHintLabel = new Label
+        {
+            Text = "※空白の場合は標準の通知音が使用されます",
+            Location = new Point(30, 105),
+            Width = 350,
+            Font = new Font(this.Font.FontFamily, 8)
+        };
+        displayGroupBox.Controls.Add(soundFileHintLabel);
 
         var languageLabel = new Label
         {
@@ -111,13 +148,13 @@ public class SettingsForm : Form
 
         // ボタン
         _saveButton.Text = "保存";
-        _saveButton.Location = new Point(260, 230);
+        _saveButton.Location = new Point(260, 310);
         _saveButton.Width = 75;
         _saveButton.DialogResult = DialogResult.OK;
         _saveButton.Click += SaveButton_Click;
 
         _cancelButton.Text = "キャンセル";
-        _cancelButton.Location = new Point(345, 230);
+        _cancelButton.Location = new Point(345, 310);
         _cancelButton.Width = 75;
         _cancelButton.DialogResult = DialogResult.Cancel;
 
@@ -131,6 +168,46 @@ public class SettingsForm : Form
 
         this.AcceptButton = _saveButton;
         this.CancelButton = _cancelButton;
+        
+        // 初期状態の設定
+        UpdateSoundFileControlsState();
+    }
+
+    /// <summary>
+    /// 通知音チェックボックスの状態が変更されたときの処理
+    /// </summary>
+    private void PlaySoundCheckBox_CheckedChanged(object? sender, EventArgs e)
+    {
+        UpdateSoundFileControlsState();
+    }
+    
+    /// <summary>
+    /// 通知音ファイル関連コントロールの状態を更新します
+    /// </summary>
+    private void UpdateSoundFileControlsState()
+    {
+        bool enabled = _playSoundCheckBox.Checked;
+        _soundFilePathTextBox.Enabled = enabled;
+        _browseSoundFileButton.Enabled = enabled;
+    }
+    
+    /// <summary>
+    /// 通知音ファイル参照ボタンがクリックされたときの処理
+    /// </summary>
+    private void BrowseSoundFileButton_Click(object? sender, EventArgs e)
+    {
+        using var dialog = new OpenFileDialog
+        {
+            Title = "通知音ファイルを選択",
+            Filter = "音声ファイル (*.wav)|*.wav|すべてのファイル (*.*)|*.*",
+            FilterIndex = 1,
+            CheckFileExists = true
+        };
+        
+        if (dialog.ShowDialog() == DialogResult.OK)
+        {
+            _soundFilePathTextBox.Text = dialog.FileName;
+        }
     }
 
     /// <summary>
@@ -141,7 +218,12 @@ public class SettingsForm : Form
         var config = _configManager.CurrentConfig;
         _apiKeyTextBox.Text = config.ApiKey;
         _displayResultCheckBox.Checked = config.DisplayOcrResult;
+        _playSoundCheckBox.Checked = config.PlaySoundOnOcrSuccess;
+        _soundFilePathTextBox.Text = config.CustomSoundFilePath ?? string.Empty;
         _languageComboBox.SelectedItem = config.Language;
+        
+        // コントロールの状態を更新
+        UpdateSoundFileControlsState();
     }
 
     /// <summary>
@@ -168,6 +250,10 @@ public class SettingsForm : Form
             config.ApiKey = _apiKeyTextBox.Text;
             config.Language = _languageComboBox.SelectedItem?.ToString() ?? "ja";
             
+            // 通知音ファイルパスの設定
+            config.CustomSoundFilePath = string.IsNullOrWhiteSpace(_soundFilePathTextBox.Text) ? 
+                null : _soundFilePathTextBox.Text;
+            
             // 初期設定時はDisplayOcrResultの設定をダイアログで確認する
             if (_isInitialSetup || isNewApiKey)
             {
@@ -179,11 +265,22 @@ public class SettingsForm : Form
                 {
                     config.DisplayOcrResult = false;
                 }
+                
+                // 通知音設定も確認する
+                if (ShowSoundSettingDialog())
+                {
+                    config.PlaySoundOnOcrSuccess = true;
+                }
+                else
+                {
+                    config.PlaySoundOnOcrSuccess = false;
+                }
             }
             else
             {
                 // 通常の設定変更時はチェックボックスの値を使用
                 config.DisplayOcrResult = _displayResultCheckBox.Checked;
+                config.PlaySoundOnOcrSuccess = _playSoundCheckBox.Checked;
             }
             
             _configManager.SaveConfig(config);
@@ -222,6 +319,24 @@ public class SettingsForm : Form
             
         return result == DialogResult.Yes;
     }
+    
+    /// <summary>
+    /// 通知音設定ダイアログを表示します
+    /// </summary>
+    /// <returns>通知音を有効にする場合はtrue、無効にする場合はfalse</returns>
+    private bool ShowSoundSettingDialog()
+    {
+        var result = MessageBox.Show(
+            "OCR成功時に通知音を鳴らしますか？\n\n" +
+            "「はい」：OCR成功時に通知音を鳴らします\n" +
+            "「いいえ」：通知音を鳴らしません",
+            "通知音設定",
+            MessageBoxButtons.YesNo,
+            MessageBoxIcon.Question,
+            MessageBoxDefaultButton.Button1);
+            
+        return result == DialogResult.Yes;
+    }
 
     /// <summary>
     /// API Key取得方法のリンクがクリックされたときの処理
@@ -246,4 +361,4 @@ public class SettingsForm : Form
                 MessageBoxIcon.Error);
         }
     }
-} 
+}

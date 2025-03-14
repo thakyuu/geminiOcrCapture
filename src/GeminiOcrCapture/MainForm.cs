@@ -1,6 +1,8 @@
 using GeminiOcrCapture.Core;
 using System.Drawing;
 using System.Diagnostics;
+using System.Media;
+using System.IO;
 
 namespace GeminiOcrCapture;
 
@@ -10,6 +12,8 @@ public partial class MainForm : Form
     private GeminiService _geminiService = null!;
     private readonly ScreenCapture _screenCapture = null!;
     private readonly ErrorHandler _errorHandler = null!;
+    private SoundPlayer _soundPlayer = null!;
+    private bool _customSoundAvailable = false;
 
     public MainForm()
     {
@@ -21,6 +25,9 @@ public partial class MainForm : Form
             _configManager = new ConfigManager();
             _errorHandler = new ErrorHandler();
             _screenCapture = new ScreenCapture();
+            
+            // 通知音の初期化
+            InitializeSound();
 
             // APIキーの確認と設定
             if (!CheckAndSetupApiKey())
@@ -52,6 +59,68 @@ public partial class MainForm : Form
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Error);
             Application.Exit();
+        }
+    }
+    
+    /// <summary>
+    /// 通知音を初期化します
+    /// </summary>
+    private void InitializeSound()
+    {
+        try
+        {
+            // 設定ファイルからカスタム通知音ファイルのパスを取得
+            string? customSoundFilePath = _configManager.CurrentConfig.CustomSoundFilePath;
+            
+            // カスタム通知音ファイルのパスが設定されていて、ファイルが存在する場合
+            if (!string.IsNullOrEmpty(customSoundFilePath) && File.Exists(customSoundFilePath))
+            {
+                _soundPlayer = new SoundPlayer(customSoundFilePath);
+                _soundPlayer.LoadAsync(); // 非同期で読み込み
+                _customSoundAvailable = true;
+                Debug.WriteLine($"カスタム通知音を読み込みました: {customSoundFilePath}");
+            }
+            else
+            {
+                Debug.WriteLine("カスタム通知音ファイルが設定されていないか、ファイルが見つかりません。標準の通知音を使用します。");
+                _customSoundAvailable = false;
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"通知音の初期化中にエラーが発生しました: {ex.Message}");
+            _customSoundAvailable = false;
+        }
+    }
+    
+    /// <summary>
+    /// 通知音を再生します
+    /// </summary>
+    private void PlayNotificationSound()
+    {
+        if (_configManager.CurrentConfig.PlaySoundOnOcrSuccess)
+        {
+            try
+            {
+                if (_customSoundAvailable && _soundPlayer != null)
+                {
+                    // カスタム通知音を再生
+                    _soundPlayer.Play();
+                    Debug.WriteLine("カスタム通知音を再生しました");
+                }
+                else
+                {
+                    // 標準の通知音を再生
+                    SystemSounds.Beep.Play();
+                    Debug.WriteLine("標準の通知音を再生しました");
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"通知音の再生中にエラーが発生しました: {ex.Message}");
+                // エラーが発生した場合は標準の通知音を再生
+                SystemSounds.Beep.Play();
+            }
         }
     }
 
@@ -97,6 +166,9 @@ public partial class MainForm : Form
             {
                 var text = await _geminiService.AnalyzeImageAsync(image);
                 Clipboard.SetText(text);
+                
+                // OCR成功時に通知音を鳴らす
+                PlayNotificationSound();
                 
                 if (_configManager.CurrentConfig.DisplayOcrResult)
                 {
@@ -220,6 +292,9 @@ public partial class MainForm : Form
             Debug.WriteLine("OCR処理が成功しました。");
             
             Clipboard.SetText(text);
+            
+            // OCR成功時に通知音を鳴らす
+            PlayNotificationSound();
             
             if (_configManager.CurrentConfig.DisplayOcrResult)
             {

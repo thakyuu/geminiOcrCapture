@@ -25,6 +25,8 @@ public class ConfigManager
     {
         public string? ApiKey { get; set; }
         public bool DisplayOcrResult { get; set; } = true;
+        public bool PlaySoundOnOcrSuccess { get; set; } = true;
+        public string? CustomSoundFilePath { get; set; } = null;
         public string Language { get; set; } = "ja";
         public string FullscreenShortcut { get; set; } = "PrintScreen";
     }
@@ -117,6 +119,8 @@ public class ConfigManager
                     {
                         ApiKey = encryptedKey,
                         DisplayOcrResult = config.DisplayOcrResult,
+                        PlaySoundOnOcrSuccess = config.PlaySoundOnOcrSuccess,
+                        CustomSoundFilePath = config.CustomSoundFilePath,
                         Language = config.Language,
                         FullscreenShortcut = config.FullscreenShortcut
                     };
