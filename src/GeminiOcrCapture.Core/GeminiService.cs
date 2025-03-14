@@ -22,24 +22,17 @@ public class InlineData
 public class GeminiService : IDisposable
 {
     private readonly ConfigManager _configManager;
-    private readonly HttpClient _httpClient;
+    private readonly IHttpClientWrapper _httpClient;
     private const string API_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro-vision:generateContent";
 
-    public GeminiService(ConfigManager configManager)
+    public GeminiService(ConfigManager configManager, IHttpClientWrapper? httpClient = null)
     {
-        _configManager = configManager;
-        _httpClient = new HttpClient();
-        InitializeClient();
-    }
-
-    private void InitializeClient()
-    {
+        _configManager = configManager ?? throw new ArgumentNullException(nameof(configManager));
         if (string.IsNullOrEmpty(_configManager.CurrentConfig.ApiKey))
         {
             throw new InvalidOperationException("APIキーが設定されていません。");
         }
-
-        _httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        _httpClient = httpClient ?? new HttpClientWrapper();
     }
 
     public async Task<string> AnalyzeImageAsync(Image image)

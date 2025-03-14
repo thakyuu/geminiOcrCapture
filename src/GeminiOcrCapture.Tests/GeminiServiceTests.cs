@@ -8,6 +8,7 @@ namespace GeminiOcrCapture.Tests;
 public class GeminiServiceTests
 {
     private readonly Mock<ConfigManager> _mockConfigManager;
+    private readonly Mock<HttpClient> _mockHttpClient;
     private readonly GeminiService _geminiService;
 
     public GeminiServiceTests()
@@ -20,7 +21,15 @@ public class GeminiServiceTests
                 Language = "ja"
             });
 
-        _geminiService = new GeminiService(_mockConfigManager.Object);
+        _mockHttpClient = new Mock<HttpClient>();
+        _mockHttpClient.Setup(x => x.SendAsync(It.IsAny<HttpRequestMessage>()))
+            .ReturnsAsync(new HttpResponseMessage
+            {
+                StatusCode = System.Net.HttpStatusCode.OK,
+                Content = new StringContent("{\"text\": \"OCR結果\"}")
+            });
+
+        _geminiService = new GeminiService(_mockConfigManager.Object, _mockHttpClient.Object);
     }
 
     [Fact]
@@ -61,7 +70,7 @@ public class GeminiServiceTests
     }
 
     [Fact]
-    public async Task ValidateApiKey_WhenKeyIsValid_ShouldReturnTrue()
+    public async Task ValidateApiKeyAsync_WhenKeyIsValid_ShouldReturnTrue()
     {
         // Act
         var result = await _geminiService.ValidateApiKeyAsync("test-api-key");
@@ -71,7 +80,7 @@ public class GeminiServiceTests
     }
 
     [Fact]
-    public async Task ValidateApiKey_WhenKeyIsInvalid_ShouldReturnFalse()
+    public async Task ValidateApiKeyAsync_WhenKeyIsInvalid_ShouldReturnFalse()
     {
         // Act
         var result = await _geminiService.ValidateApiKeyAsync("invalid-api-key");
@@ -81,7 +90,7 @@ public class GeminiServiceTests
     }
 
     [Fact]
-    public async Task ValidateApiKey_WhenKeyIsEmpty_ShouldReturnFalse()
+    public async Task ValidateApiKeyAsync_WhenKeyIsEmpty_ShouldReturnFalse()
     {
         // Act
         var result = await _geminiService.ValidateApiKeyAsync(string.Empty);

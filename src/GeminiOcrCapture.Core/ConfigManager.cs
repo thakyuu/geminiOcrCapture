@@ -11,7 +11,9 @@ public class ConfigManager
     private readonly string _configPath;
     private Config _currentConfig;
 
-    public ConfigManager(string? basePath = null)
+    public ConfigManager() : this(null) { }
+
+    public ConfigManager(string? basePath)
     {
         _configPath = Path.Combine(basePath ?? AppContext.BaseDirectory, CONFIG_FILE);
         _currentConfig = LoadConfig();
@@ -25,7 +27,7 @@ public class ConfigManager
         public string FullscreenShortcut { get; set; } = "PrintScreen";
     }
 
-    public Config CurrentConfig => _currentConfig;
+    public virtual Config CurrentConfig => _currentConfig;
 
     public Config LoadConfig()
     {
