@@ -25,6 +25,18 @@ namespace GeminiOcrCapture
                 {
                     _soundPlayer.Dispose();
                 }
+
+                // NotifyIconのリソースを解放
+                if (_notifyIcon != null)
+                {
+                    _notifyIcon.Dispose();
+                }
+
+                // ContextMenuStripのリソースを解放
+                if (_contextMenu != null)
+                {
+                    _contextMenu.Dispose();
+                }
             }
             base.Dispose(disposing);
         }

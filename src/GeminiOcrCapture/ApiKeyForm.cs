@@ -48,7 +48,7 @@ public partial class ApiKeyForm : Form
 
         var descriptionLabel = new Label
         {
-            Text = "このアプリケーションを使用するには、Google AI StudioからGemini API Keyを取得して入力してください。",
+            Text = "このアプリケーションを使用するには、Google AI Studioから\nGemini API Keyを取得して入力してください。",
             Location = new Point(10, 40),
             Width = 380,
             Height = 40

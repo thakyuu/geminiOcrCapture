@@ -1,5 +1,7 @@
 using GeminiOcrCapture.Core;
 using System.Drawing;
+using System.Linq;
+using System.Diagnostics;
 
 namespace GeminiOcrCapture;
 
@@ -9,6 +11,7 @@ namespace GeminiOcrCapture;
 public class SettingsForm : Form
 {
     private readonly ConfigManager _configManager;
+    private readonly MainForm _mainForm;
     private TextBox _apiKeyTextBox = new TextBox();
     private CheckBox _displayResultCheckBox = new CheckBox();
     private CheckBox _playSoundCheckBox = new CheckBox();
@@ -24,9 +27,11 @@ public class SettingsForm : Form
     /// 設定フォームのコンストラクタ
     /// </summary>
     /// <param name="configManager">設定マネージャーのインスタンス</param>
-    public SettingsForm(ConfigManager configManager)
+    /// <param name="mainForm">メインフォームのインスタンス</param>
+    public SettingsForm(ConfigManager configManager, MainForm mainForm)
     {
         _configManager = configManager;
+        _mainForm = mainForm;
         InitializeComponents();
         LoadCurrentSettings();
         
@@ -244,15 +249,18 @@ public class SettingsForm : Form
 
         try
         {
+            Logger.Log("設定の保存を開始します...");
             var config = _configManager.CurrentConfig;
             bool isNewApiKey = string.IsNullOrWhiteSpace(config.ApiKey) && !string.IsNullOrWhiteSpace(_apiKeyTextBox.Text);
             
+            // 通知音ファイルパスの設定
+            string? oldSoundPath = config.CustomSoundFilePath;
+            string? newSoundPath = string.IsNullOrWhiteSpace(_soundFilePathTextBox.Text) ? null : _soundFilePathTextBox.Text;
+            config.CustomSoundFilePath = newSoundPath;
+            Logger.Log($"通知音ファイルパスを変更: {oldSoundPath ?? "未設定"} → {newSoundPath ?? "未設定"}");
+            
             config.ApiKey = _apiKeyTextBox.Text;
             config.Language = _languageComboBox.SelectedItem?.ToString() ?? "ja";
-            
-            // 通知音ファイルパスの設定
-            config.CustomSoundFilePath = string.IsNullOrWhiteSpace(_soundFilePathTextBox.Text) ? 
-                null : _soundFilePathTextBox.Text;
             
             // 初期設定時はDisplayOcrResultの設定をダイアログで確認する
             if (_isInitialSetup || isNewApiKey)
@@ -280,10 +288,26 @@ public class SettingsForm : Form
             {
                 // 通常の設定変更時はチェックボックスの値を使用
                 config.DisplayOcrResult = _displayResultCheckBox.Checked;
+                bool oldPlaySound = config.PlaySoundOnOcrSuccess;
                 config.PlaySoundOnOcrSuccess = _playSoundCheckBox.Checked;
+                Logger.Log($"通知音の有効/無効を変更: {oldPlaySound} → {config.PlaySoundOnOcrSuccess}");
             }
             
+            Logger.Log("ConfigManagerに設定を保存します...");
             _configManager.SaveConfig(config);
+            Logger.Log("設定の保存が完了しました");
+
+            // 通知音の設定を再初期化
+            Logger.Log("通知音を再初期化します...");
+            _mainForm.ReinitializeSound();
+            Logger.Log("通知音の再初期化が完了しました");
+
+            // 設定が正常に保存されたことを確認
+            _configManager.LoadConfig();
+            if (_configManager.CurrentConfig.CustomSoundFilePath != newSoundPath)
+            {
+                throw new InvalidOperationException("設定の保存に失敗しました。");
+            }
 
             MessageBox.Show(
                 "設定を保存しました。",
@@ -293,6 +317,11 @@ public class SettingsForm : Form
         }
         catch (Exception ex)
         {
+            Logger.Log($"設定の保存中にエラーが発生しました: {ex.Message}");
+            if (ex.InnerException != null)
+            {
+                Logger.Log($"内部エラー: {ex.InnerException.Message}");
+            }
             MessageBox.Show(
                 $"設定の保存に失敗しました。\n{ex.Message}",
                 "エラー",
