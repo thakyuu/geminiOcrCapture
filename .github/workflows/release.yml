@@ -24,14 +24,16 @@ jobs:
       run: dotnet build --configuration Release --no-restore
     
     - name: Test
-      run: dotnet test --configuration Release --no-build
+      run: |
+        dotnet test --configuration Release --no-build --logger "console;verbosity=detailed" --collect:"XPlat Code Coverage" --timeout 300
+      timeout-minutes: 5
     
     - name: Publish
       run: dotnet publish src/GeminiOcrCapture -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o publish
     
     - name: Copy additional files
       run: |
-        Copy-Item README.md, README.en.md, LICENSE -Destination publish
+        Copy-Item README.md, README.en.md, LICENSE, RELEASE_NOTES.md, RELEASE_NOTES.en.md -Destination publish
     
     - name: Create ZIP archive
       run: Compress-Archive -Path publish/* -DestinationPath GeminiOcrCapture-${{ github.ref_name }}.zip
