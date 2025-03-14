@@ -8,6 +8,7 @@ Gemini OCR Capture is a simple and user-friendly OCR tool that extracts text fro
 - **OCR Processing**: High-precision text extraction using Google Gemini 2.0 Flash API
 - **Multi-language Support**: Supports multiple languages including Japanese
 - **Simple UI**: Intuitive and easy-to-use interface
+- **Custom Notification Sounds**: Play custom notification sounds when OCR is successful
 
 ## Requirements
 
@@ -56,6 +57,24 @@ Gemini OCR Capture is a simple and user-friendly OCR tool that extracts text fro
 2. Drag to select the area you want to capture
 3. The selected area will be captured, and OCR processing will start automatically
 4. The extracted text will be displayed
+
+### Custom Notification Sound Settings
+
+1. Check "Play notification sound when OCR is successful" in the settings screen
+2. Enter the path of the .wav file you want to use in the "Notification sound file" field, or click the "Browse..." button to select a file
+3. Click the "Save" button to save the settings
+
+Note: If left blank, the standard beep sound will be used.
+
+#### Placing Custom Notification Sound Files
+
+You can place the following file in the `Sounds` directory to use it as the default notification sound:
+- `PrintComplete.wav` - Notification sound played when OCR is successful
+
+If you want to use the standard Windows print completion sound, copy the following file:
+`C:\Windows\Media\Windows Print Complete.wav` → `PrintComplete.wav`
+
+Note: Sound sources with rights (such as standard Windows sounds) cannot be redistributed. By default, the application uses the standard beep sound (SystemSounds.Beep).
 
 ## Troubleshooting
 
