@@ -55,8 +55,18 @@ public class ConfigManager
                 try
                 {
                     Debug.WriteLine("APIキーの復号化を開始します。");
-                    config.ApiKey = DecryptApiKey(config.ApiKey);
-                    Debug.WriteLine("APIキーの復号化が完了しました。");
+                    var decryptedKey = DecryptApiKey(config.ApiKey);
+                    
+                    // 復号化されたキーが空でないことを確認
+                    if (!string.IsNullOrEmpty(decryptedKey))
+                    {
+                        config.ApiKey = decryptedKey;
+                        Debug.WriteLine("APIキーの復号化が完了しました。");
+                    }
+                    else
+                    {
+                        Debug.WriteLine("復号化されたAPIキーが空です。元のキーを使用します。");
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -64,6 +74,17 @@ public class ConfigManager
                     // 復号化に失敗した場合は、元のキーをそのまま使用
                 }
             }
+            
+            // APIキーが設定されているか確認
+            if (!string.IsNullOrEmpty(config.ApiKey))
+            {
+                Debug.WriteLine($"APIキーが設定されています: {config.ApiKey.Substring(0, 3)}...{config.ApiKey.Substring(config.ApiKey.Length - 3)}");
+            }
+            else
+            {
+                Debug.WriteLine("APIキーが設定されていません。");
+            }
+            
             _currentConfig = config;
             return config;
         }
@@ -80,18 +101,35 @@ public class ConfigManager
         try
         {
             Debug.WriteLine("設定ファイルの保存を開始します。");
+            
+            // APIキーが設定されているか確認
             if (!string.IsNullOrEmpty(config.ApiKey))
             {
+                Debug.WriteLine($"保存するAPIキー: {config.ApiKey.Substring(0, 3)}...{config.ApiKey.Substring(config.ApiKey.Length - 3)}");
                 Debug.WriteLine("APIキーの暗号化を開始します。");
+                
                 var encryptedKey = EncryptApiKey(config.ApiKey);
-                config = new Config
+                
+                // 暗号化されたキーが空でないことを確認
+                if (!string.IsNullOrEmpty(encryptedKey))
                 {
-                    ApiKey = encryptedKey,
-                    DisplayOcrResult = config.DisplayOcrResult,
-                    Language = config.Language,
-                    FullscreenShortcut = config.FullscreenShortcut
-                };
-                Debug.WriteLine("APIキーの暗号化が完了しました。");
+                    config = new Config
+                    {
+                        ApiKey = encryptedKey,
+                        DisplayOcrResult = config.DisplayOcrResult,
+                        Language = config.Language,
+                        FullscreenShortcut = config.FullscreenShortcut
+                    };
+                    Debug.WriteLine("APIキーの暗号化が完了しました。");
+                }
+                else
+                {
+                    Debug.WriteLine("暗号化されたAPIキーが空です。暗号化せずに保存します。");
+                }
+            }
+            else
+            {
+                Debug.WriteLine("APIキーが設定されていません。");
             }
 
             var json = JsonSerializer.Serialize(config, new JsonSerializerOptions
@@ -103,6 +141,13 @@ public class ConfigManager
             File.WriteAllText(_configPath, json);
             _currentConfig = config;
             Debug.WriteLine("設定ファイルの保存が完了しました。");
+            
+            // 保存後に再読み込みして確認
+            var reloadedConfig = LoadConfig();
+            if (string.IsNullOrEmpty(reloadedConfig.ApiKey) && !string.IsNullOrEmpty(config.ApiKey))
+            {
+                Debug.WriteLine("警告: 保存後の再読み込みでAPIキーが空になっています。");
+            }
         }
         catch (Exception ex)
         {

@@ -29,31 +29,16 @@ public class GeminiService : IDisposable
     public GeminiService(ConfigManager configManager, IHttpClientWrapper? httpClient = null)
     {
         _configManager = configManager ?? throw new ArgumentNullException(nameof(configManager));
+        
+        // APIキーが設定されているか確認
         if (string.IsNullOrEmpty(_configManager.CurrentConfig.ApiKey))
         {
             throw new InvalidOperationException("APIキーが設定されていません。");
         }
+        
         _httpClient = httpClient ?? new HttpClientWrapper();
         
-        // APIキーの検証を非同期で実行
-        Task.Run(async () =>
-        {
-            try
-            {
-                Debug.WriteLine("APIキーの検証を開始します。");
-                var isValid = await ValidateApiKeyAsync(_configManager.CurrentConfig.ApiKey);
-                if (!isValid)
-                {
-                    Debug.WriteLine("APIキーが無効です。");
-                    throw new InvalidOperationException("APIキーが無効です。設定を確認してください。");
-                }
-                Debug.WriteLine("APIキーの検証が成功しました。");
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"APIキーの検証中にエラーが発生しました: {ex.Message}");
-            }
-        });
+        // 非同期検証は削除し、実際の使用時に検証するように変更
     }
 
     public async Task<string> AnalyzeImageAsync(Image image)
@@ -63,22 +48,24 @@ public class GeminiService : IDisposable
             throw new ArgumentNullException(nameof(image));
         }
 
+        // APIキーの検証
+        var apiKey = _configManager.CurrentConfig.ApiKey;
+        if (string.IsNullOrEmpty(apiKey))
+        {
+            Debug.WriteLine("APIキーが設定されていません。");
+            throw new InvalidOperationException("APIキーが設定されていません。設定画面からAPIキーを設定してください。");
+        }
+
         try
         {
             Debug.WriteLine("画像の解析を開始します。");
+            Debug.WriteLine($"使用するAPIキー: {apiKey.Substring(0, 3)}...{apiKey.Substring(apiKey.Length - 3)}");
             
             // 画像をBase64に変換
             using var ms = new MemoryStream();
             image.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
             var base64Image = Convert.ToBase64String(ms.ToArray());
             Debug.WriteLine($"画像をBase64に変換しました。サイズ: {base64Image.Length} 文字");
-
-            // APIキーの検証
-            if (string.IsNullOrEmpty(_configManager.CurrentConfig.ApiKey))
-            {
-                Debug.WriteLine("APIキーが設定されていません。");
-                throw new InvalidOperationException("APIキーが設定されていません。設定画面からAPIキーを設定してください。");
-            }
 
             // リクエストの構築
             var request = new
@@ -120,7 +107,7 @@ public class GeminiService : IDisposable
             // APIリクエストの送信
             Debug.WriteLine($"APIリクエストを送信します: {API_BASE_URL}?key=********");
             var response = await _httpClient.PostAsync(
-                $"{API_BASE_URL}?key={_configManager.CurrentConfig.ApiKey}",
+                $"{API_BASE_URL}?key={apiKey}",
                 content);
 
             if (!response.IsSuccessStatusCode)

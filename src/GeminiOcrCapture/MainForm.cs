@@ -6,7 +6,7 @@ namespace GeminiOcrCapture;
 public partial class MainForm : Form
 {
     private readonly ConfigManager _configManager = null!;
-    private readonly GeminiService _geminiService = null!;
+    private GeminiService _geminiService = null!;
     private readonly ScreenCapture _screenCapture = null!;
     private readonly ErrorHandler _errorHandler = null!;
 
@@ -16,13 +16,32 @@ public partial class MainForm : Form
 
         try
         {
+            // 設定マネージャーとエラーハンドラーを初期化
             _configManager = new ConfigManager();
-            _geminiService = new GeminiService(_configManager);
-            _screenCapture = new ScreenCapture();
             _errorHandler = new ErrorHandler();
+            _screenCapture = new ScreenCapture();
 
+            // APIキーの確認と設定
+            if (!CheckAndSetupApiKey())
+            {
+                Application.Exit();
+                return;
+            }
+
+            // 設定ファイルを再読み込み（APIキーが確実に読み込まれるようにするため）
+            _configManager.LoadConfig();
+
+            // APIキーが設定されたら、GeminiServiceを初期化
+            InitializeGeminiService();
+            
+            // イベントの初期化
             InitializeEvents();
-            CheckApiKey();
+            
+            // APIキーの検証が完了するまで少し待機
+            System.Threading.Thread.Sleep(500);
+            
+            // キャプチャを開始
+            _screenCapture.StartCapture();
         }
         catch (Exception ex)
         {
@@ -32,6 +51,40 @@ public partial class MainForm : Form
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Error);
             Application.Exit();
+        }
+    }
+
+    /// <summary>
+    /// GeminiServiceを初期化します
+    /// </summary>
+    private void InitializeGeminiService()
+    {
+        try
+        {
+            // APIキーが設定されているか再確認
+            if (string.IsNullOrEmpty(_configManager.CurrentConfig.ApiKey))
+            {
+                throw new InvalidOperationException("APIキーが設定されていません。設定画面から設定してください。");
+            }
+            
+            _geminiService = new GeminiService(_configManager);
+            
+            // APIキーの検証を同期的に行う
+            Task.Run(async () => {
+                try {
+                    // 簡単なテスト呼び出しを行い、APIキーが有効か確認
+                    using var image = new Bitmap(1, 1);
+                    await _geminiService.AnalyzeImageAsync(image);
+                    return true;
+                }
+                catch {
+                    return false;
+                }
+            }).Wait(1000); // 最大1秒待機
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException("Gemini APIサービスの初期化に失敗しました。" + ex.Message, ex);
         }
     }
 
@@ -64,20 +117,47 @@ public partial class MainForm : Form
         };
     }
 
-    private void CheckApiKey()
+    /// <summary>
+    /// APIキーが設定されているかチェックし、設定されていない場合は設定ダイアログを表示します
+    /// </summary>
+    /// <returns>APIキーが正常に設定された場合はtrue、キャンセルされた場合はfalse</returns>
+    private bool CheckAndSetupApiKey()
     {
         if (string.IsNullOrEmpty(_configManager.CurrentConfig.ApiKey))
         {
+            // 初回起動時の説明メッセージを表示
+            MessageBox.Show(
+                "Gemini OCR Captureへようこそ！\n\n" +
+                "このアプリケーションを使用するには、Google AI StudioからGemini API Keyを取得して設定する必要があります。\n\n" +
+                "次のダイアログでAPIキーを入力してください。\n" +
+                "キャンセルした場合、アプリケーションは終了します。",
+                "初回設定",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+
+            // APIキー設定ダイアログを表示
             using var form = new ApiKeyForm(_configManager);
             if (form.ShowDialog() != DialogResult.OK)
             {
-                Application.Exit();
-                return;
+                MessageBox.Show(
+                    "APIキーが設定されていないため、アプリケーションを終了します。\n" +
+                    "次回起動時に再度設定することができます。",
+                    "終了",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+                return false;
             }
+
+            // APIキーが正常に設定された場合の確認メッセージ
+            MessageBox.Show(
+                "APIキーが正常に設定されました。\n" +
+                "スクリーンキャプチャを開始します。",
+                "設定完了",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
         }
 
-        // キャプチャを開始
-        _screenCapture.StartCapture();
+        return true;
     }
 
     protected override void OnLoad(EventArgs e)
@@ -87,76 +167,5 @@ public partial class MainForm : Form
         // フォームを非表示にする
         this.Visible = false;
         this.ShowInTaskbar = false;
-    }
-}
-
-public partial class ApiKeyForm : Form
-{
-    private readonly ConfigManager _configManager;
-    private TextBox _apiKeyTextBox = new TextBox();
-    private Button _okButton = new Button();
-    private Button _cancelButton = new Button();
-
-    public ApiKeyForm(ConfigManager configManager)
-    {
-        _configManager = configManager;
-        InitializeComponents();
-    }
-
-    private void InitializeComponents()
-    {
-        this.Text = "API Key設定";
-        this.Width = 400;
-        this.Height = 150;
-        this.FormBorderStyle = FormBorderStyle.FixedDialog;
-        this.MaximizeBox = false;
-        this.MinimizeBox = false;
-        this.StartPosition = FormStartPosition.CenterScreen;
-
-        var label = new Label
-        {
-            Text = "Gemini API Keyを入力してください：",
-            Location = new Point(10, 10),
-            Width = 380
-        };
-
-        _apiKeyTextBox.Location = new Point(10, 30);
-        _apiKeyTextBox.Width = 360;
-        _apiKeyTextBox.PasswordChar = '*';
-
-        _okButton.Text = "OK";
-        _okButton.Location = new Point(210, 70);
-        _okButton.DialogResult = DialogResult.OK;
-        _okButton.Click += OkButton_Click;
-
-        _cancelButton.Text = "キャンセル";
-        _cancelButton.Location = new Point(290, 70);
-        _cancelButton.DialogResult = DialogResult.Cancel;
-
-        this.Controls.AddRange(new Control[] { label, _apiKeyTextBox, _okButton, _cancelButton });
-        this.AcceptButton = _okButton;
-        this.CancelButton = _cancelButton;
-    }
-
-    private void OkButton_Click(object? sender, EventArgs e)
-    {
-        if (string.IsNullOrWhiteSpace(_apiKeyTextBox.Text))
-        {
-            MessageBox.Show("APIキーを入力してください。", "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            this.DialogResult = DialogResult.None;
-            return;
-        }
-
-        try
-        {
-            var config = _configManager.CurrentConfig;
-            config.ApiKey = _apiKeyTextBox.Text;
-            _configManager.SaveConfig(config);
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show($"APIキーの保存に失敗しました。\n{ex.Message}", "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            this.DialogResult = DialogResult.None;
-        }
     }
 }
