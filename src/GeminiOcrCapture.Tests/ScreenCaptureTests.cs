@@ -32,7 +32,7 @@ public class ScreenCaptureTests : IDisposable
         capturedImage.Should().NotBeNull();
     }
 
-    [Fact]
+    [Fact(Skip = "UIテストのため、手動テストで実行する必要があります")]
     public void StartCapture_WhenCancelled_ShouldRaiseCancelEvent()
     {
         // Arrange
@@ -72,7 +72,7 @@ public class ScreenCaptureTests : IDisposable
         // 実際の環境では発生しにくいシナリオ
     }
 
-    [Fact]
+    [Fact(Skip = "UIテストのため、手動テストで実行する必要があります")]
     public void StartCapture_ShouldShowOverlayWindow()
     {
         // Note: UIテストは別途、統合テストとして実装する必要があります
