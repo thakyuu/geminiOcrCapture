@@ -1,0 +1,46 @@
+name: Release Build
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: windows-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v3
+      with:
+        dotnet-version: 9.0.x
+    
+    - name: Restore dependencies
+      run: dotnet restore
+    
+    - name: Build
+      run: dotnet build --configuration Release --no-restore
+    
+    - name: Test
+      run: dotnet test --configuration Release --no-build
+    
+    - name: Publish
+      run: dotnet publish src/GeminiOcrCapture -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o publish
+    
+    - name: Copy additional files
+      run: |
+        Copy-Item README.md, README.en.md, LICENSE -Destination publish
+    
+    - name: Create ZIP archive
+      run: Compress-Archive -Path publish/* -DestinationPath GeminiOcrCapture-${{ github.ref_name }}.zip
+    
+    - name: Create Release
+      id: create_release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: GeminiOcrCapture-${{ github.ref_name }}.zip
+        draft: false
+        prerelease: false
+        generate_release_notes: true 

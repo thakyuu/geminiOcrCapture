@@ -25,3 +25,9 @@ TestResults/
 
 # Coverage results
 coverage.xml
+
+# Publish directory
+publish/
+
+# Release ZIP files
+GeminiOcrCapture-*.zip
