@@ -66,15 +66,6 @@ Gemini OCR Capture is a simple and user-friendly OCR tool that extracts text fro
 
 Note: If left blank, the standard beep sound will be used.
 
-#### Placing Custom Notification Sound Files
-
-You can place the following file in the `Sounds` directory to use it as the default notification sound:
-- `PrintComplete.wav` - Notification sound played when OCR is successful
-
-If you want to use the standard Windows print completion sound, copy the following file:
-`C:\Windows\Media\Windows Print Complete.wav` → `PrintComplete.wav`
-
-Note: Sound sources with rights (such as standard Windows sounds) cannot be redistributed. By default, the application uses the standard beep sound (SystemSounds.Beep).
 
 ## Troubleshooting
 

@@ -66,15 +66,6 @@ Gemini OCR Captureは、Google Gemini 2.0 Flash APIを使用して、画面キ�
 
 ※空白の場合は標準のビープ音が使用されます。
 
-#### カスタム通知音ファイルの配置
-
-`Sounds`ディレクトリに以下のファイルを配置することで、デフォルトの通知音として使用できます：
-- `PrintComplete.wav` - OCR成功時に再生される通知音
-
-Windowsの標準的な印刷完了音を使用する場合は、以下のファイルをコピーしてください：
-`C:\Windows\Media\Windows Print Complete.wav` → `PrintComplete.wav`
-
-※権利の存在する音源（Windowsの標準音声など）は再配布できません。アプリケーションのデフォルトでは、標準のビープ音（SystemSounds.Beep）が使用されます。
 
 ## トラブルシューティング
 
