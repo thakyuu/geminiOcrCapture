@@ -9,6 +9,10 @@ Gemini OCR Captureは、Google Gemini 2.0 Flash APIを使用して、画面キ�
 - **多言語対応**: 日本語を含む複数の言語に対応
 - **シンプルなUI**: 直感的で使いやすいインターフェース
 - **カスタム通知音**: OCR成功時に任意の通知音を再生可能
+- **セキュリティ機能**:
+  - **APIキーの保護**: Windows Data Protection API (DPAPI)を使用してAPIキーを暗号化
+  - **ユーザー固有の暗号化**: 各ユーザーのWindowsアカウントに紐づけられた暗号化を使用
+  - **安全な保存**: 暗号化されたAPIキーはローカルの設定ファイルに保存
 
 ## 必要条件
 
@@ -100,7 +104,7 @@ Gemini OCR Captureは、Google Gemini 2.0 Flash APIを使用して、画面キ�
 
 ```powershell
 # リポジトリのクローン
-git clone https://github.com/yourusername/GeminiOcrCapture.git
+git clone https://github.com/thakyuu/GeminiOcrCapture.git
 cd GeminiOcrCapture
 
 # ビルド

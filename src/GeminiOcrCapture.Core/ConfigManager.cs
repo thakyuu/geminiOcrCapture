@@ -11,6 +11,8 @@ public class ConfigManager
     private const string CONFIG_FILE = "config.json";
     private readonly string _configPath;
     private Config _currentConfig;
+    // アプリケーション固有のエントロピーデータ
+    private static readonly byte[] _additionalEntropy = Encoding.UTF8.GetBytes("GeminiOcrCapture_SecureKey");
 
     public ConfigManager() : this(null) { }
 
@@ -171,14 +173,12 @@ public class ConfigManager
     {
         try
         {
-            // 簡易的な暗号化（実際のアプリケーションではより強固な方法を使用すべき）
+            // Windows DPAPIを使用した暗号化（追加のエントロピーデータを使用）
             byte[] keyBytes = Encoding.UTF8.GetBytes(apiKey);
-            byte[] encryptedBytes = new byte[keyBytes.Length];
-            
-            for (int i = 0; i < keyBytes.Length; i++)
-            {
-                encryptedBytes[i] = (byte)(keyBytes[i] ^ 0x5A); // XOR with 0x5A
-            }
+            byte[] encryptedBytes = ProtectedData.Protect(
+                keyBytes, 
+                _additionalEntropy, // 追加のエントロピーデータを使用
+                DataProtectionScope.CurrentUser); // 現在のユーザーのみがアクセス可能
             
             return Convert.ToBase64String(encryptedBytes);
         }
@@ -195,12 +195,10 @@ public class ConfigManager
         try
         {
             byte[] encryptedBytes = Convert.FromBase64String(encryptedApiKey);
-            byte[] decryptedBytes = new byte[encryptedBytes.Length];
-            
-            for (int i = 0; i < encryptedBytes.Length; i++)
-            {
-                decryptedBytes[i] = (byte)(encryptedBytes[i] ^ 0x5A); // XOR with 0x5A
-            }
+            byte[] decryptedBytes = ProtectedData.Unprotect(
+                encryptedBytes,
+                _additionalEntropy, // 追加のエントロピーデータを使用
+                DataProtectionScope.CurrentUser); // 現在のユーザーのみがアクセス可能
             
             return Encoding.UTF8.GetString(decryptedBytes);
         }

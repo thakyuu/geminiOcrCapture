@@ -9,6 +9,10 @@ Gemini OCR Capture is a simple and user-friendly OCR tool that extracts text fro
 - **Multi-language Support**: Supports multiple languages including Japanese
 - **Simple UI**: Intuitive and easy-to-use interface
 - **Custom Notification Sounds**: Play custom notification sounds when OCR is successful
+- **Security Features**:
+  - **API Key Protection**: API keys are encrypted using Windows Data Protection API (DPAPI)
+  - **User-Specific Encryption**: Encryption is tied to each user's Windows account
+  - **Secure Storage**: Encrypted API keys are stored in local configuration file
 
 ## Requirements
 
@@ -100,7 +104,7 @@ Note: If left blank, the standard beep sound will be used.
 
 ```powershell
 # Clone the repository
-git clone https://github.com/yourusername/GeminiOcrCapture.git
+git clone https://github.com/thakyuu/GeminiOcrCapture.git
 cd GeminiOcrCapture
 
 # Build
