@@ -334,6 +334,12 @@ public partial class MainForm : Form
                     MessageBox.Show(text, "OCR結果", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
 
+                // キャプチャした画像のリソースを解放
+                if (image is IDisposable disposableImage1)
+                {
+                    disposableImage1.Dispose();
+                }
+
                 Application.Exit();
             }
             catch (Exception ex)
@@ -345,6 +351,12 @@ public partial class MainForm : Form
                 }
                 else
                 {
+                    // キャプチャした画像のリソースを解放
+                    if (image is IDisposable disposableImage2)
+                    {
+                        disposableImage2.Dispose();
+                    }
+                    
                     _errorHandler.HandleError(ex, "OCR処理に失敗しました。");
                     Application.Exit();
                 }
@@ -395,6 +407,11 @@ public partial class MainForm : Form
             
             default:
                 // 終了
+                // キャプチャした画像のリソースを解放
+                if (capturedImage is IDisposable disposableImage)
+                {
+                    disposableImage.Dispose();
+                }
                 Application.Exit();
                 break;
         }
@@ -432,6 +449,11 @@ public partial class MainForm : Form
             }
             catch (Exception initEx)
             {
+                // キャプチャした画像のリソースを解放
+                if (capturedImage is IDisposable disposable1)
+                {
+                    disposable1.Dispose();
+                }
                 throw new InvalidOperationException($"Gemini APIサービスの再初期化に失敗しました: {initEx.Message}", initEx);
             }
             
@@ -444,6 +466,11 @@ public partial class MainForm : Form
             // _geminiServiceがnullでないことを確認
             if (_geminiService == null)
             {
+                // キャプチャした画像のリソースを解放
+                if (capturedImage is IDisposable disposable2)
+                {
+                    disposable2.Dispose();
+                }
                 throw new InvalidOperationException("Gemini APIサービスが初期化されていません。");
             }
             
@@ -458,6 +485,12 @@ public partial class MainForm : Form
             if (_configManager.CurrentConfig.DisplayOcrResult)
             {
                 MessageBox.Show(text, "OCR結果", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+
+            // キャプチャした画像のリソースを解放
+            if (capturedImage is IDisposable disposable3)
+            {
+                disposable3.Dispose();
             }
 
             Application.Exit();
@@ -477,6 +510,12 @@ public partial class MainForm : Form
             }
             else
             {
+                // キャプチャした画像のリソースを解放
+                if (capturedImage is IDisposable disposable4)
+                {
+                    disposable4.Dispose();
+                }
+
                 // より詳細なエラーメッセージを表示
                 string errorMessage = $"OCR処理の再試行に失敗しました。\n\nエラー詳細: {ex.Message}";
                 if (ex.InnerException != null)

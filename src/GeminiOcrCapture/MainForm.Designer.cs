@@ -37,6 +37,18 @@ namespace GeminiOcrCapture
                 {
                     _contextMenu.Dispose();
                 }
+                
+                // ScreenCaptureのリソースを解放
+                if (_screenCapture != null)
+                {
+                    _screenCapture.Dispose();
+                }
+                
+                // GeminiServiceのリソースを解放
+                if (_geminiService != null)
+                {
+                    _geminiService.Dispose();
+                }
             }
             base.Dispose(disposing);
         }
