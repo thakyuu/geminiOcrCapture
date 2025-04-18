@@ -6,8 +6,6 @@ Gemini OCR Captureは、Google Gemini 2.0 Flash APIを使用して、画面キ�
 
 - **画面キャプチャ**: 選択範囲のキャプチャが可能
 - **OCR処理**: Google Gemini 2.0 Flash APIを使用した高精度なテキスト抽出
-- **多言語対応**: 日本語を含む複数の言語に対応
-- **シンプルなUI**: 直感的で使いやすいインターフェース
 - **カスタム通知音**: OCR成功時に任意の通知音を再生可能
 - **セキュリティ機能**:
   - **APIキーの保護**: Windows Data Protection API (DPAPI)を使用してAPIキーを暗号化
